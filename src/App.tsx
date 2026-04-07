@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { Upload, Download, Image as ImageIcon, Type, Layout, Package, Layers, SlidersHorizontal } from 'lucide-react';
 
 interface LabelData {
@@ -171,11 +172,12 @@ export default function App() {
     if (!data.tastingNotes) return;
     setIsGeneratingBg(true);
     setBgError(null);
+    console.log("Starting background generation with notes:", data.tastingNotes);
     try {
-      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
       const prompt = `A Renaissance style painting featuring ${data.tastingNotes}. Artistic, masterpiece, oil painting, rich colors, classical composition, suitable for a coffee bag label background. No text.`;
+      console.log("Prompt:", prompt);
       
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -197,23 +199,28 @@ export default function App() {
         }
       }
       
+      console.log("Image URL length:", imageUrl.length);
+      
       if (imageUrl) {
         const img = new Image();
         img.onload = () => {
+          console.log("Image loaded successfully");
           setGeneratedBackground(img);
           setIsGeneratingBg(false);
         };
         img.onerror = () => {
+          console.error("Image failed to load");
           setBgError("Failed to load generated image.");
           setIsGeneratingBg(false);
         };
         img.src = imageUrl;
       } else {
+        console.error("No image URL generated");
         setBgError("No image generated.");
         setIsGeneratingBg(false);
       }
     } catch (error: any) {
-      console.error(error);
+      console.error("Generation error:", error);
       setBgError(error?.message || "Failed to generate background.");
       setIsGeneratingBg(false);
     }
