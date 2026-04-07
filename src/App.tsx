@@ -178,12 +178,13 @@ export default function App() {
       const prompt = `A Renaissance style painting featuring ${data.tastingNotes}. Artistic, masterpiece, oil painting, rich colors, classical composition, suitable for a coffee bag label background. No text.`;
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-image-preview',
-        contents: prompt,
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: prompt }]
+        },
         config: {
           imageConfig: {
-            aspectRatio: "3:4",
-            imageSize: "1K"
+            aspectRatio: "16:9"
           }
         }
       });
@@ -211,9 +212,9 @@ export default function App() {
         setBgError("No image generated.");
         setIsGeneratingBg(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setBgError("Failed to generate background.");
+      setBgError(error?.message || "Failed to generate background.");
       setIsGeneratingBg(false);
     }
   };
@@ -576,24 +577,6 @@ export default function App() {
                   </div>
                   <InputField label="Origin" value={data.origin} onChange={v => setData({...data, origin: v})} />
                   <InputField label="Tasting Notes" value={data.tastingNotes} onChange={v => setData({...data, tastingNotes: v})} multiline />
-                  <button 
-                    onClick={generateBackground}
-                    disabled={isGeneratingBg || !data.tastingNotes}
-                    className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md"
-                  >
-                    {isGeneratingBg ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="w-4 h-4" />
-                        Generate AI Background
-                      </>
-                    )}
-                  </button>
-                  {bgError && <p className="text-xs text-red-500 font-medium">{bgError}</p>}
                 </div>
               </section>
 
@@ -674,6 +657,34 @@ export default function App() {
                     </div>
                     <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, setMockupImage)} />
                   </label>
+                </div>
+              </section>
+
+              {/* AI Background Generation */}
+              <section>
+                <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-gray-400" /> AI Background
+                </h2>
+                <div className="bg-white border border-gray-100 shadow-sm p-6 rounded-2xl">
+                  <p className="text-xs text-gray-500 mb-4">Generate a Renaissance-style background based on your tasting notes.</p>
+                  <button 
+                    onClick={generateBackground}
+                    disabled={isGeneratingBg || !data.tastingNotes}
+                    className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    {isGeneratingBg ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-4 h-4" />
+                        Generate AI Background
+                      </>
+                    )}
+                  </button>
+                  {bgError && <p className="text-xs text-red-500 font-medium mt-2">{bgError}</p>}
                 </div>
               </section>
 
