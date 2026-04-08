@@ -35,10 +35,10 @@ type AspectRatio = 'original' | '1:1' | '4:5' | '16:9';
 
 const defaultData: LabelData = {
   name: 'Bombarderen de Cikurayyan',
-  varietal: 'Yellow Bourbon, Ateng',
+  varietal: 'Ateng Super, Yellow Bourbon',
   process: 'Anaerobic Honey',
   origin: 'Sukahurip, Garut, West Java',
-  tastingNotes: 'Blueberry, Black Cherry, Lime, Sweet Aftertaste'
+  tastingNotes: 'Blueberry, Black Cherry, Lime, Longan, Sweet Aftertaste'
 };
 
 const defaultSettings: LayoutSettings = {
@@ -136,8 +136,86 @@ export default function App() {
   const [exportQuality, setExportQuality] = useState<number>(0.9);
 
   const [generatedBackground, setGeneratedBackground] = useState<HTMLImageElement | null>(null);
+  const [bgMode, setBgMode] = useState<'renaissance' | 'gradient'>('renaissance');
   const [isGeneratingBg, setIsGeneratingBg] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
+
+  const getColorsFromNotes = (notes: string) => {
+    const colorMap: { [key: string]: string } = {
+      'blueberry': '#3c4a70', // Muted indigo
+      'cherry': '#5e1914',    // Deep madder red
+      'lime': '#6b8e23',      // Olive green
+      'longan': '#c2a378',    // Antique parchment
+      'sweet': '#d4a5a5',     // Dusty rose
+      'banana': '#d4af37',    // Gold/Ochre
+      'creamy': '#f5e6d3',    // Warm ivory
+      'tropical': '#b35a2d',  // Burnt orange
+      'floral': '#c28e8e',    // Muted floral
+      'flower': '#c28e8e',    // Muted floral
+      'honey': '#c68e17',     // Warm amber
+      'chocolate': '#4a2c2a', // Sepia brown
+      'nutty': '#704214',     // Umber
+      'caramel': '#966919',   // Raw sienna
+      'citrus': '#c5a059',    // Warm yellow
+      'berry': '#6b3e5a'      // Deep plum
+    };
+
+    const lowerNotes = notes.toLowerCase();
+    const colors: string[] = [];
+    
+    Object.keys(colorMap).forEach(key => {
+      if (lowerNotes.includes(key)) {
+        colors.push(colorMap[key]);
+      }
+    });
+
+    // Fallback colors if no matches (Warm Renaissance neutrals)
+    if (colors.length === 0) colors.push('#d7ccc8', '#efebe9');
+    if (colors.length === 1) colors.push(colors[0] + 'aa'); // Add a slightly transparent version
+
+    return colors;
+  };
+
+  const generateGradient = () => {
+    setIsGeneratingBg(true);
+    setBgError(null);
+    
+    try {
+      const colors = getColorsFromNotes(data.tastingNotes);
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920;
+      canvas.height = 1080;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not get canvas context");
+
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      colors.forEach((color, index) => {
+        gradient.addColorStop(index / (colors.length - 1), color);
+      });
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Add some texture/noise
+      for (let i = 0; i < 10000; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.05})`;
+        ctx.fillRect(x, y, size, size);
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        setGeneratedBackground(img);
+        setIsGeneratingBg(false);
+      };
+      img.src = canvas.toDataURL('image/png');
+    } catch (err) {
+      setBgError("Failed to generate gradient.");
+      setIsGeneratingBg(false);
+    }
+  };
 
   const labelCanvasRef = useRef<HTMLCanvasElement>(null);
   const mockupCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -172,12 +250,27 @@ export default function App() {
     if (!data.tastingNotes) return;
     setIsGeneratingBg(true);
     setBgError(null);
-    console.log("Starting background generation with notes:", data.tastingNotes);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
-      const prompt = `A Renaissance style painting featuring ${data.tastingNotes}. Artistic, masterpiece, oil painting, rich colors, classical composition, suitable for a coffee bag label background. No text.`;
-      console.log("Prompt:", prompt);
+      const getCategoryPrompt = () => {
+        const name = data.name.toLowerCase();
+        const notes = data.tastingNotes.toLowerCase();
+        
+        if (name.includes('bloementuin') || notes.includes('floral') || notes.includes('flower')) {
+          return "a lush Renaissance-style flower garden (Bloementuin) with vibrant blooms, soft lighting, and classical Dutch still life aesthetic";
+        }
+        if (name.includes('fruittuin') || notes.includes('fruity') || notes.includes('fruit') || notes.includes('berry') || notes.includes('banana')) {
+          return "a bountiful Renaissance-style fruit orchard (Fruittuin) with overflowing baskets of tropical and classical fruits, rich textures, and warm sunlight";
+        }
+        if (name.includes('bombarderen') || notes.includes('funky') || notes.includes('experimental')) {
+          return "a dramatic and experimental Renaissance-style scene (Bombarderen) with bold colors, dynamic composition, and surreal artistic elements";
+        }
+        return `a Renaissance-style scene featuring themes of ${data.tastingNotes}`;
+      };
+
+      const categoryPrompt = getCategoryPrompt();
+      const prompt = `A high-quality Renaissance oil painting background for a product mockup, featuring ${categoryPrompt}. Artistic, masterpiece, rich colors, classical composition, slightly blurred background style to make the product in front pop. The center area should be relatively clear of busy details to allow the product packaging to stand out. No text, no people.`;
       
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -199,23 +292,18 @@ export default function App() {
         }
       }
       
-      console.log("Image URL length:", imageUrl.length);
-      
       if (imageUrl) {
         const img = new Image();
         img.onload = () => {
-          console.log("Image loaded successfully");
           setGeneratedBackground(img);
           setIsGeneratingBg(false);
         };
         img.onerror = () => {
-          console.error("Image failed to load");
           setBgError("Failed to load generated image.");
           setIsGeneratingBg(false);
         };
         img.src = imageUrl;
       } else {
-        console.error("No image URL generated");
         setBgError("No image generated.");
         setIsGeneratingBg(false);
       }
@@ -233,12 +321,7 @@ export default function App() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (generatedBackground) {
-      ctx.drawImage(generatedBackground, 0, 0, canvas.width, canvas.height);
-      if (templateImage) {
-        ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-      }
-    } else if (templateImage) {
+    if (templateImage) {
       ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
     } else {
       // Placeholder background
@@ -325,6 +408,38 @@ export default function App() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Draw AI Generated Background first
+    if (generatedBackground) {
+      const bgRatio = generatedBackground.width / generatedBackground.height;
+      const canvasRatio = canvas.width / canvas.height;
+      let bgDrawWidth, bgDrawHeight, bgOffsetX, bgOffsetY;
+
+      if (bgRatio > canvasRatio) {
+        bgDrawHeight = canvas.height;
+        bgDrawWidth = generatedBackground.width * (bgDrawHeight / generatedBackground.height);
+        bgOffsetX = (canvas.width - bgDrawWidth) / 2;
+        bgOffsetY = 0;
+      } else {
+        bgDrawWidth = canvas.width;
+        bgDrawHeight = generatedBackground.height * (bgDrawWidth / generatedBackground.width);
+        bgOffsetX = 0;
+        bgOffsetY = (canvas.height - bgDrawHeight) / 2;
+      }
+      ctx.drawImage(generatedBackground, bgOffsetX, bgOffsetY, bgDrawWidth, bgDrawHeight);
+
+      // Add a subtle vignette and lighting to highlight the center
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.1,
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.7
+      );
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+      gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     let drawWidth = canvas.width;
     let drawHeight = canvas.height;
     let offsetX = 0;
@@ -373,6 +488,12 @@ export default function App() {
       ctx.translate(x, y);
       ctx.rotate((label.rotation * Math.PI) / 180);
       
+      // Add a soft drop shadow behind the packaging to ground it in the scene
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+      ctx.shadowBlur = 40 * (label.scale / 100);
+      ctx.shadowOffsetX = 10 * (label.scale / 100);
+      ctx.shadowOffsetY = 20 * (label.scale / 100);
+
       ctx.globalAlpha = label.opacity / 100;
       ctx.globalCompositeOperation = label.blendMode;
 
@@ -670,12 +791,32 @@ export default function App() {
               {/* AI Background Generation */}
               <section>
                 <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-gray-400" /> AI Background
+                  <ImageIcon className="w-4 h-4 text-gray-400" /> Mockup Scene Background
                 </h2>
                 <div className="bg-white border border-gray-100 shadow-sm p-6 rounded-2xl">
-                  <p className="text-xs text-gray-500 mb-4">Generate a Renaissance-style background based on your tasting notes.</p>
+                  <div className="flex gap-2 mb-4 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                    <button 
+                      onClick={() => setBgMode('renaissance')}
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${bgMode === 'renaissance' ? 'bg-white text-blue-600 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Renaissance
+                    </button>
+                    <button 
+                      onClick={() => setBgMode('gradient')}
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${bgMode === 'gradient' ? 'bg-white text-blue-600 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Gradient
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-4">
+                    {bgMode === 'renaissance' 
+                      ? "Generate a Renaissance-style scene based on the product category (Bloementuin, Fruittuin, or Bombarderen)."
+                      : "Generate a smooth color gradient derived from your coffee's tasting notes."}
+                  </p>
+                  
                   <button 
-                    onClick={generateBackground}
+                    onClick={bgMode === 'renaissance' ? generateBackground : generateGradient}
                     disabled={isGeneratingBg || !data.tastingNotes}
                     className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md"
                   >
@@ -687,7 +828,7 @@ export default function App() {
                     ) : (
                       <>
                         <ImageIcon className="w-4 h-4" />
-                        Generate AI Background
+                        {bgMode === 'renaissance' ? 'Generate Mockup Background' : 'Generate Gradient Background'}
                       </>
                     )}
                   </button>
