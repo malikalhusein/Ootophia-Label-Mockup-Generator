@@ -128,6 +128,8 @@ export default function App() {
 
   const [templateImage, setTemplateImage] = useState<HTMLImageElement | null>(null);
   const [mockupImage, setMockupImage] = useState<HTMLImageElement | null>(null);
+  const [mockupSize, setMockupSize] = useState({ width: 1080, height: 1080 });
+  const [labelSize, setLabelSize] = useState({ width: 1920, height: 1080 });
   const [scale, setScale] = useState<number>(1);
   
   const [isUploading, setIsUploading] = useState(false);
@@ -314,12 +316,14 @@ export default function App() {
     }
   };
 
-  const drawLabel = () => {
+  const drawLabel = (renderScale: number = scale) => {
     const canvas = labelCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     if (templateImage) {
       ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
@@ -328,12 +332,12 @@ export default function App() {
       ctx.fillStyle = '#e8e4d9';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#c4b59d';
-      ctx.lineWidth = 20 * scale;
-      ctx.strokeRect(40 * scale, 40 * scale, canvas.width - 80 * scale, canvas.height - 80 * scale);
+      ctx.lineWidth = 20 * renderScale;
+      ctx.strokeRect(40 * renderScale, 40 * renderScale, canvas.width - 80 * renderScale, canvas.height - 80 * renderScale);
     }
 
     const titleColor = getTitleColor(data.name);
-    ctx.font = `italic 700 ${settings.titleFontSize * scale}px "Playfair Display", serif`;
+    ctx.font = `italic 700 ${settings.titleFontSize * renderScale}px "Playfair Display", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
@@ -342,16 +346,16 @@ export default function App() {
 
     // 3D / Shadow effect
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowOffsetX = 4 * scale;
-    ctx.shadowOffsetY = 4 * scale;
-    ctx.shadowBlur = 6 * scale;
+    ctx.shadowOffsetX = 4 * renderScale;
+    ctx.shadowOffsetY = 4 * renderScale;
+    ctx.shadowBlur = 6 * renderScale;
     ctx.fillStyle = titleColor;
     ctx.fillText(data.name, titleX, titleY);
 
     ctx.shadowColor = 'transparent';
-    ctx.lineWidth = 2 * scale;
+    ctx.lineWidth = 2 * renderScale;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.strokeText(data.name, titleX - 2 * scale, titleY - 2 * scale);
+    ctx.strokeText(data.name, titleX - 2 * renderScale, titleY - 2 * renderScale);
     ctx.fillStyle = titleColor;
     ctx.fillText(data.name, titleX, titleY);
 
@@ -364,8 +368,8 @@ export default function App() {
     const row1Y = canvas.height * (settings.gridY / 100);
     const row2Y = canvas.height * ((settings.gridY + settings.rowSpacing) / 100);
     
-    const labelFont = `bold ${settings.detailsFontSize * scale}px "Inter", sans-serif`;
-    const valueFont = `normal ${settings.detailsFontSize * scale}px "Inter", sans-serif`;
+    const labelFont = `bold ${settings.detailsFontSize * renderScale}px "Inter", sans-serif`;
+    const valueFont = `normal ${settings.detailsFontSize * renderScale}px "Inter", sans-serif`;
     const textColor = '#333333';
 
     const drawDetail = (label: string, value: string, x: number, y: number) => {
@@ -377,7 +381,7 @@ export default function App() {
       const maxWidth = canvas.width * 0.35;
       const words = value.split(' ');
       let line = '';
-      let currentY = y + (settings.detailsFontSize * scale * settings.lineHeight);
+      let currentY = y + (settings.detailsFontSize * renderScale * settings.lineHeight);
       
       for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + ' ';
@@ -386,7 +390,7 @@ export default function App() {
         if (testWidth > maxWidth && n > 0) {
           ctx.fillText(line.trim(), x, currentY);
           line = words[n] + ' ';
-          currentY += (settings.detailsFontSize * scale * settings.lineHeight);
+          currentY += (settings.detailsFontSize * renderScale * settings.lineHeight);
         } else {
           line = testLine;
         }
@@ -407,6 +411,8 @@ export default function App() {
     if (!canvas || !ctx || !labelCanvas) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Draw AI Generated Background first
     if (generatedBackground) {
@@ -497,6 +503,10 @@ export default function App() {
       ctx.globalAlpha = label.opacity / 100;
       ctx.globalCompositeOperation = label.blendMode;
 
+      // Ensure high quality rendering for labels
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
       // Draw centered on the translation point
       ctx.drawImage(
         labelCanvas, 
@@ -545,24 +555,46 @@ export default function App() {
 
   useEffect(() => {
     if (labelCanvasRef.current) {
+      // Use a higher rendering scale for the mockup to ensure crisp text
+      // Capped at a reasonable limit to avoid canvas memory issues
+      const mockupScaleFactor = activeTab === 'mockup' ? 3 : 1;
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+      let effectiveScale = scale * mockupScaleFactor * dpr;
+      
+      // Safety cap for canvas size (e.g. 8192px max dimension)
+      const maxDim = 8192;
       if (templateImage) {
-        labelCanvasRef.current.width = templateImage.width * scale;
-        labelCanvasRef.current.height = templateImage.height * scale;
+        const potentialWidth = templateImage.width * effectiveScale;
+        const potentialHeight = templateImage.height * effectiveScale;
+        if (potentialWidth > maxDim || potentialHeight > maxDim) {
+          effectiveScale = Math.min(maxDim / templateImage.width, maxDim / templateImage.height);
+        }
+        setLabelSize({ width: templateImage.width * scale, height: templateImage.height * scale });
+        labelCanvasRef.current.width = templateImage.width * effectiveScale;
+        labelCanvasRef.current.height = templateImage.height * effectiveScale;
       } else {
-        labelCanvasRef.current.width = 1920 * scale;
-        labelCanvasRef.current.height = 1080 * scale;
+        const potentialWidth = 1920 * effectiveScale;
+        const potentialHeight = 1080 * effectiveScale;
+        if (potentialWidth > maxDim || potentialHeight > maxDim) {
+          effectiveScale = Math.min(maxDim / 1920, maxDim / 1080);
+        }
+        setLabelSize({ width: 1920 * scale, height: 1080 * scale });
+        labelCanvasRef.current.width = 1920 * effectiveScale;
+        labelCanvasRef.current.height = 1080 * effectiveScale;
       }
+
+      document.fonts.ready.then(() => {
+        drawLabel(effectiveScale);
+        if (activeTab === 'mockup') {
+          drawMockup();
+        }
+      });
     }
-    document.fonts.ready.then(() => {
-      drawLabel();
-      if (activeTab === 'mockup') {
-        drawMockup();
-      }
-    });
   }, [data, templateImage, settings, scale, activeTab, generatedBackground]);
 
   useEffect(() => {
     if (mockupCanvasRef.current) {
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
       let targetWidth = 1080;
       let targetHeight = 1080;
 
@@ -582,8 +614,13 @@ export default function App() {
         }
       }
 
-      mockupCanvasRef.current.width = targetWidth;
-      mockupCanvasRef.current.height = targetHeight;
+      setMockupSize({ width: targetWidth, height: targetHeight });
+      mockupCanvasRef.current.width = targetWidth * dpr;
+      mockupCanvasRef.current.height = targetHeight * dpr;
+      
+      // We don't use ctx.scale(dpr, dpr) here because drawMockup 
+      // handles the drawing using the canvas.width/height directly 
+      // or relative coordinates.
     }
     drawMockup();
   }, [mockupImage, mockupLabels, activeTab, mockupAspectRatio, mockupImageScale]);
@@ -934,14 +971,14 @@ export default function App() {
           <canvas 
             ref={labelCanvasRef} 
             className={`max-w-full max-h-full object-contain shadow-2xl rounded-sm ring-1 ring-black/5 ${activeTab === 'mockup' ? 'hidden' : 'block'}`}
-            style={{ width: 'auto', height: 'auto' }}
+            style={{ width: `${labelSize.width}px`, height: `${labelSize.height}px` }}
           />
           
           {/* Mockup Canvas */}
           <canvas 
             ref={mockupCanvasRef} 
             className={`max-w-full max-h-full object-contain shadow-2xl rounded-sm ring-1 ring-black/5 ${activeTab === 'label' ? 'hidden' : 'block'}`}
-            style={{ width: 'auto', height: 'auto' }}
+            style={{ width: `${mockupSize.width}px`, height: `${mockupSize.height}px` }}
           />
 
           {activeTab === 'label' && !templateImage && !isUploading && (
